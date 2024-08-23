@@ -4,6 +4,7 @@ go 1.23.0
 
 require (
 	github.com/PullRequestInc/go-gpt3 v1.2.0
+	github.com/sashabaranov/go-openai v1.28.2
 	github.com/spf13/viper v1.19.0
 )
 

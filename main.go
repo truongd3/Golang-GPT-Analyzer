@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/PullRequestInc/go-gpt3"
+	openai "github.com/sashabaranov/go-openai"
 	"github.com/spf13/viper"
 )
 
@@ -19,7 +19,7 @@ func main() {
 	}
 
 	ctx := context.Background()
-	client := gpt3.NewClient(apiKey)
+	client := openai.NewClient(apiKey)
 
 	const inputFile = "./input_with_code.txt"
 	fileBytes, err := os.ReadFile(inputFile)
@@ -31,20 +31,22 @@ func main() {
 	msgSuffix := "\n```"
 	msg := msgPrefix + string(fileBytes) + msgSuffix
 
-	outputBuilder := strings.Builder{}
-	err = client.CompletionStreamWithEngine(ctx, gpt3.TextDavinci003Engine, gpt3.CompletionRequest{
-		Prompt: []string{
-			msg,
+	resp, err := client.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: openai.GPT3Dot5Turbo,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: msg,
+				},
+			},
 		},
-		MaxTokens:   gpt3.IntPtr(3000),
-		Temperature: gpt3.Float32Ptr(0),
-	}, func(resp *gpt3.CompletionResponse) {
-		outputBuilder.WriteString(resp.Choices[0].Text)
-	})
+	)
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatalln("Failed to create chat completion: %v", err)
 	}
-	output := strings.TrimSpace(outputBuilder.String())
+	output := strings.TrimSpace(resp.Choices[0].Message.Content)
 
 	const outputFile = "./output.txt"
 	err = os.WriteFile(outputFile, []byte(output), os.ModePerm)
