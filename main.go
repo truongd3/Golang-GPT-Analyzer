@@ -2,24 +2,32 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"os"
-	"strings"
 
-	openai "github.com/sashabaranov/go-openai"
 	"github.com/spf13/viper"
+	"google.golang.org/genai"
+
+	"github.com/truongd3/golang-gpt-analyzer/helpers"
 )
 
 func main() {
 	viper.SetConfigFile(".env")
 	viper.ReadInConfig()
-	apiKey := viper.GetString("API_KEY")
+	apiKey := viper.GetString("GOOGLE_API_KEY")
 	if apiKey == "" {
-		panic("Missing API Key")
+		log.Fatal("Missing API Key")
 	}
 
 	ctx := context.Background()
-	client := openai.NewClient(apiKey)
+	client, err := genai.NewClient(ctx, &genai.ClientConfig{
+		APIKey:  apiKey,
+		Backend: genai.BackendGeminiAPI,
+	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	const inputFile = "./input_with_code.txt"
 	fileBytes, err := os.ReadFile(inputFile)
@@ -27,30 +35,21 @@ func main() {
 		log.Fatalf("Failed to read file: %v", err)
 	}
 
-	msgPrefix := "Give me a list of libraries that are used in the code\n```python\n"
-	msgSuffix := "\n```"
-	msg := msgPrefix + string(fileBytes) + msgSuffix
+	promptPrefix := "Given a Python code snippet. Extract a list of libraries that are used in the code:\n```python\n"
+	promptSuffix := "\n```\nList the libraries in a comma-separated format. If parent and child libraries are used, only list the parent library. Only list the libraries, do not provide any additional information."
+	prompt := promptPrefix + string(fileBytes) + promptSuffix
 
-	resp, err := client.CreateChatCompletion(
+	result, err := client.Models.GenerateContent(
 		ctx,
-		openai.ChatCompletionRequest{
-			Model: openai.GPT3Dot5Turbo,
-			Messages: []openai.ChatCompletionMessage{
-				{
-					Role:    openai.ChatMessageRoleUser,
-					Content: msg,
-				},
-			},
-		},
+		"gemini-2.0-flash",
+		genai.Text(prompt),
+		nil,
 	)
 	if err != nil {
-		log.Fatalln("Failed to create chat completion: %v", err)
+		log.Fatal(err)
 	}
-	output := strings.TrimSpace(resp.Choices[0].Message.Content)
+	fmt.Println(result.Text())
 
-	const outputFile = "./output.txt"
-	err = os.WriteFile(outputFile, []byte(output), os.ModePerm)
-	if err != nil {
-		log.Fatalf("Failed to read file: %v", err)
-	}
+	helpers.ConvertLibrariesToOutputFile(result.Text())
+	fmt.Println("DONE ✅")
 }

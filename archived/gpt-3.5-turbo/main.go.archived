@@ -1,0 +1,56 @@
+package main
+
+import (
+	"context"
+	"log"
+	"os"
+	"strings"
+
+	openai "github.com/sashabaranov/go-openai"
+	"github.com/spf13/viper"
+)
+
+func main() {
+	viper.SetConfigFile(".env")
+	viper.ReadInConfig()
+	apiKey := viper.GetString("OPENAI_API_KEY")
+	if apiKey == "" {
+		panic("Missing API Key")
+	}
+
+	ctx := context.Background()
+	client := openai.NewClient(apiKey)
+
+	const inputFile = "./input_with_code.txt"
+	fileBytes, err := os.ReadFile(inputFile)
+	if err != nil {
+		log.Fatalf("Failed to read file: %v", err)
+	}
+
+	promptPrefix := "Give me a list of libraries that are used in the code\n```python\n"
+	promptSuffix := "\n```"
+	prompt := promptPrefix + string(fileBytes) + promptSuffix
+
+	resp, err := client.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model: openai.GPT3Dot5Turbo,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: prompt,
+				},
+			},
+		},
+	)
+	if err != nil {
+		log.Fatalln("Failed to create chat completion: %v", err)
+	}
+	output := strings.TrimSpace(resp.Choices[0].Message.Content)
+
+	const outputFile = "./output.txt"
+	err = os.WriteFile(outputFile, []byte(output), os.ModePerm)
+	if err != nil {
+		log.Fatalf("Failed to read file: %v", err)
+	}
+}

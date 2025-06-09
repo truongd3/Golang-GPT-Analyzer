@@ -1,30 +1,267 @@
-import os
-from dotenv import load_dotenv
-from pathlib import Path
-env_path = Path(".")/".env"
-load_dotenv(dotenv_path = env_path)
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import string
+import nltk
+from nltk.corpus import stopwords
+from wordcloud import WordCloud
+from collections import Counter
 
-import openai
-import helper
-db = "CustomerList.csv"
+# Download stopwords if not already downloaded
+nltk.download('stopwords')
 
-system_content = "You will receive a list of Justworks' customers - these companies are using Justworks products. Some Justworks employees want to use their services/products because they trust their customers. You should recommend the related and good services. Be descriptive and helpful."
+# Load the train.csv
+df = pd.read_csv('../data/raw/train.csv')  # adjust path if needed
+print(df.shape)
+df.head()
 
-client = openai.OpenAI(
-    api_key = os.environ["AI_API_KEY"],
-    base_url = "https://api.aimlapi.com",
-)
+print(df.isnull().sum())
 
-def getRecommendation(command_text):
-    prompt = helper.get_data_to_prompt()
-    prompt += f"Please recommend users the companies that do {command_text} services."
-    chat_completion = client.chat.completions.create(
-        model = "mistralai/Mistral-7B-Instruct-v0.2",
-        messages = [
-            {"role": "system", "content": system_content},
-            {"role": "user", "content": prompt},
-        ],
-        temperature = 0.7,
-        max_tokens = 100,
-    )
-    return chat_completion.choices[0].message.content
+# Check number of duplicates
+num_duplicates = df.duplicated(subset='comment_text').sum()
+print(f"Number of duplicate comments: {num_duplicates}")
+
+import re
+
+def clean_text(text):
+    # Remove URLs
+    text = re.sub(r'http\S+', '', text)
+    # Remove punctuation
+    text = text.translate(str.maketrans('', '', string.punctuation))
+    # Lowercase
+    text = text.lower()
+    # Remove digits
+    text = re.sub(r'\d+', '', text)
+    # Remove extra whitespace
+    text = text.strip()
+    return text
+
+def remove_stopwords(text):
+    words = text.split()
+    filtered_words = [word for word in words if word not in stop_words]
+    return ' '.join(filtered_words)
+
+# Apply cleaning
+df['clean_comment'] = df['comment_text'].apply(clean_text)
+df[['comment_text', 'clean_comment']].head()
+
+# Apply stopword removal
+stop_words = set(stopwords.words('english'))
+df['clean_comment'] = df['clean_comment'].apply(remove_stopwords)
+df[['comment_text', 'clean_comment']].head()
+
+# Replace empty strings with np.nan
+df['clean_comment'] = df['clean_comment'].replace('', np.nan)
+
+# Check number of null values
+print(df['clean_comment'].isnull().sum())
+
+# Drop NaNs
+df = df.dropna(subset=['clean_comment'])
+print("Shape after cleaning: ",df.shape)
+
+df.to_csv('../data/processed/train_clean.csv', index=False)
+
+# Each label is a binary column: 0 (no) or 1 (yes)
+label_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+
+# Sum how many examples of each label
+label_counts = df[label_cols].sum().sort_values(ascending=False)
+
+import seaborn as sns
+# Plot
+plt.figure(figsize=(8,5))
+sns.barplot(x=label_counts.values, y=label_counts.index, palette="magma")
+plt.title("Number of Comments per Toxic Label", fontsize=14)
+plt.xlabel("Number of Comments")
+plt.ylabel("Toxic Category")
+plt.show()
+
+# Assuming your dataset is called df_balanced
+label_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+
+# Count number of labels per comment
+df['num_labels'] = df[label_cols].sum(axis=1)
+
+# Classify as toxic (>=1 label) or non-toxic (0 labels)
+df['is_toxic'] = (df['num_labels'] > 0).astype(int)
+
+# Count toxic vs non-toxic
+class_counts = df['is_toxic'].value_counts().sort_index()
+
+# Plot
+plt.figure(figsize=(6,4))
+plt.bar(['Non-toxic', 'Toxic'], class_counts, color=['skyblue', 'salmon'])
+plt.title('Number of Toxic vs Non-Toxic Comments')
+plt.xlabel('Comment Class')
+plt.ylabel('Number of Comments')
+plt.grid(axis='y')
+plt.show()
+
+# Count how many labels each comment has
+df['num_labels'] = df[label_cols].sum(axis=1)
+
+# Plot number of labels per comment
+plt.figure(figsize=(6,4))
+sns.countplot(x='num_labels', data=df, palette="coolwarm")
+plt.title("Number of Labels per Comment", fontsize=14)
+plt.xlabel("Number of Labels")
+plt.ylabel("Number of Comments")
+plt.show()
+
+df_balanced['num_labels'] = df_balanced[label_cols].sum(axis=1)
+
+# Plot number of labels per comment
+plt.figure(figsize=(6,4))
+sns.countplot(x='num_labels', data=df_balanced, palette="coolwarm")
+plt.title("Number of Labels per Comment after Oversampling", fontsize=14)
+plt.xlabel("Number of Labels")
+plt.ylabel("Number of Comments")
+plt.show()
+
+# Toxic comments text
+toxic_text = " ".join(df[df['toxic'] == 1]['clean_comment'])
+
+# Non-Toxic comments text
+non_toxic_text = " ".join(df[df['toxic'] == 0]['clean_comment'])
+
+# Generate word clouds
+toxic_wc = WordCloud(width=800, height=400, background_color='white').generate(toxic_text)
+non_toxic_wc = WordCloud(width=800, height=400, background_color='white').generate(non_toxic_text)
+
+# Plot side by side
+fig, axes = plt.subplots(1, 2, figsize=(20, 8))
+
+# Toxic
+axes[0].imshow(toxic_wc, interpolation='bilinear')
+axes[0].axis('off')
+axes[0].set_title('Toxic Comments Word Cloud', fontsize=20)
+
+# Non-Toxic
+axes[1].imshow(non_toxic_wc, interpolation='bilinear')
+axes[1].axis('off')
+axes[1].set_title('Non-Toxic Comments Word Cloud', fontsize=20)
+
+plt.tight_layout()
+plt.show()
+
+# Tokenize all toxic clean comments
+toxic_words = " ".join(df[df['toxic'] == 1]['clean_comment']).split()
+
+# Count word frequencies
+word_counts = Counter(toxic_words)
+
+# Most common words
+common_words = word_counts.most_common(20)
+print(common_words)
+
+# Plot
+words, counts = zip(*common_words)
+plt.figure(figsize=(10,5))
+sns.barplot(x=list(counts), y=list(words))
+plt.title("Most Common Words in Toxic Comments")
+plt.xlabel("Word Frequency")
+plt.show()
+
+# Find co-occurrence
+co_occurrence = df[label_cols].corr()
+
+# Heatmap
+plt.figure(figsize=(8,6))
+sns.heatmap(co_occurrence, annot=True, cmap="Blues")
+plt.title("Label Co-Occurrence Heatmap")
+plt.show()
+
+# Load cleaned data
+df = pd.read_csv('../data/processed/train_clean.csv')
+label_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+
+# 1. Print class distribution BEFORE oversampling
+print("Class distribution before oversampling:")
+print(df[label_cols].sum())
+
+# Define rare classes to oversample
+rare_labels = ['threat', 'identity_hate', 'severe_toxic']
+
+# Oversample ratios
+oversample_ratio_default = 10  # For identity_hate, severe_toxic
+oversample_ratio_threats = 50   # Specific for threat
+
+# Container for oversampled DataFrames
+oversampled_dfs = []
+
+for label in rare_labels:
+    rare_samples = df[df[label] == 1]
+
+    if label == 'threat':
+        oversampled = pd.concat([rare_samples] * oversample_ratio_threats, ignore_index=True)
+    else:
+        oversampled = pd.concat([rare_samples] * oversample_ratio_default, ignore_index=True)
+
+    oversampled_dfs.append(oversampled)
+
+# Combine all oversampled rare examples
+oversampled_rare = pd.concat(oversampled_dfs, ignore_index=True)
+
+# Combine back with the original DataFrame
+df_balanced = pd.concat([df, oversampled_rare], ignore_index=True)
+
+# Shuffle the dataset
+df_balanced = df_balanced.sample(frac=1, random_state=42).reset_index(drop=True)
+
+# 2. Print class distribution AFTER oversampling
+print("\nClass distribution after oversampling:")
+print(df_balanced[label_cols].sum())
+
+print("\nOriginal dataset size:", df.shape)
+print("Balanced dataset size:", df_balanced.shape)
+
+# Save the balanced dataset
+df_balanced.to_csv('../data/processed/train_balanced.csv', index=False)
+
+# Each label is a binary column: 0 (no) or 1 (yes)
+label_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+
+# Sum how many examples of each label
+label_counts = df_balanced[label_cols].sum().sort_values(ascending=False)
+
+# Plot
+plt.figure(figsize=(8,5))
+sns.barplot(x=label_counts.values, y=label_counts.index, palette="magma")
+plt.title("Number of Comments per Toxic Label", fontsize=14)
+plt.xlabel("Number of Comments")
+plt.ylabel("Toxic Category")
+plt.show()
+
+# Count how many labels each comment has
+df_balanced['num_labels'] = df_balanced[label_cols].sum(axis=1)
+
+# Plot number of labels per comment
+plt.figure(figsize=(6,4))
+sns.countplot(x='num_labels', data=df_balanced, palette="coolwarm")
+plt.title("Number of Labels per Comment after Oversampling", fontsize=14)
+plt.xlabel("Number of Labels")
+plt.ylabel("Number of Comments")
+plt.show()
+
+# Assuming your dataset is called df_balanced
+label_cols = ['toxic', 'severe_toxic', 'obscene', 'threat', 'insult', 'identity_hate']
+
+# Count number of labels per comment
+df_balanced['num_labels'] = df_balanced[label_cols].sum(axis=1)
+
+# Classify as toxic (>=1 label) or non-toxic (0 labels)
+df_balanced['is_toxic'] = (df_balanced['num_labels'] > 0).astype(int)
+
+# Count toxic vs non-toxic
+class_counts = df_balanced['is_toxic'].value_counts().sort_index()
+
+# Plot
+plt.figure(figsize=(6,4))
+plt.bar(['Non-toxic', 'Toxic'], class_counts, color=['skyblue', 'salmon'])
+plt.title('Number of Toxic vs Non-Toxic Comments after Oversampling')
+plt.xlabel('Comment Class')
+plt.ylabel('Number of Comments')
+plt.grid(axis='y')
+plt.show()
+
