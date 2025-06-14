@@ -6,8 +6,8 @@
 ## How to run
 
 1. Clone the repo `git clone https://github.com/truongd3/Golang-GPT-Analyzer`
-2. Create an `.env` file and paste your `API_KEY` there
-3. On the terminal, type `go run main.go`
+2. Create an `.env` file and paste your `GOOGLE_API_KEY` there
+3. On the terminal, type `go run main.go <input_file_path> <output_file_path>`
 
 _Instruction_: [Chat GPT GOlang Project BUILD - 
 Akhil Sharma](https://youtu.be/QNIQXpdpBuA?si=P06cOCYCZlWuD9vi)

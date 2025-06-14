@@ -13,6 +13,12 @@ import (
 )
 
 func main() {
+	if len(os.Args) < 3 {
+		log.Fatal("Usage: go run main.go <input_file_path> <output_file_path>")
+	}
+	inputFile := os.Args[1]
+	outputFile := os.Args[2]
+
 	viper.SetConfigFile(".env")
 	viper.ReadInConfig()
 	apiKey := viper.GetString("GOOGLE_API_KEY")
@@ -29,11 +35,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	const inputFile = "./input_with_code.txt"
 	fileBytes, err := os.ReadFile(inputFile)
 	if err != nil {
 		log.Fatalf("Failed to read file: %v", err)
 	}
+	fmt.Println("Parsing file:", inputFile)
 
 	promptPrefix := "Given a Python code snippet. Extract a list of libraries that are used in the code:\n```python\n"
 	promptSuffix := "\n```\nList the libraries in a comma-separated format. If parent and child libraries are used, only list the parent library. Only list the libraries, do not provide any additional information."
@@ -50,6 +56,6 @@ func main() {
 	}
 	fmt.Println(result.Text())
 
-	helpers.ConvertLibrariesToOutputFile(result.Text())
+	helpers.ConvertLibrariesToOutputFile(result.Text(), outputFile)
 	fmt.Println("DONE ✅")
 }

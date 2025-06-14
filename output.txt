@@ -1,9 +1,0 @@
-- pandas
-- numpy
-- matplotlib
-- string
-- nltk
-- wordcloud
-- collections
-- re
-- seaborn
