@@ -1,0 +1,9 @@
+- Pandas
+- NumPy
+- matplotlib
+- string
+- nltk
+- WordCloud
+- collections
+- re
+- seaborn
