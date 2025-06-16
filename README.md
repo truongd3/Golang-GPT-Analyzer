@@ -1,6 +1,14 @@
-# Golang GPT Analyzer
+# Golang GPT + Gemini Analyzer
+![language](https://img.shields.io/badge/Language-%20Golang%20-orange.svg)
+![API](https://img.shields.io/badge/API-%20Gemini%202.0%20Flash%20-orange.svg)
+![CI Status](https://img.shields.io/badge/build-passing-brightgreen.svg)
+[![License](https://img.shields.io/cocoapods/l/SAConfettiView.svg?style=flat)](http://cocoapods.org/pods/SAConfettiView)
+
+#### 👉🏼 [Link](https://youtu.be/6WfcN37xvho) to demo video on YouTube
 
 ![demo-gemini-2.0](assets/demo-golang-analyzer.gif)
+
+## What it does
 
 - Extracted **350,000+ Python libraries** by developing a Golang tool to analyze Python files via the terminal
 - Leveraged the **GPT-3.5 Turbo** and **Gemini 2.0 Flash** API for efficient library extraction
